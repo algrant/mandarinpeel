@@ -1,0 +1,95 @@
+
+
+
+
+
+
+
+
+
+<script>
+var game = new Phaser.Game(700, 600, Phaser.AUTO, 'caja', { preload: preload, create: create, update: update, render: render });
+
+function preload() {}
+
+var radio=10,cant=20,cuerpo=null,w=30,h=10,rect=null,N=40;
+
+
+function create() {
+    game.physics.startSystem(Phaser.Physics.P2JS);
+
+    game.stage.backgroundColor = '#2d2d2d';
+    
+    game.physics.p2.gravity.y = 20;
+	
+     /* //P2.js way
+	 var p3= new p2.Body({mass: 1,position: [game.physics.p2.pxmi(100), game.physics.p2.pxmi(100)]});	
+     var forma = new p2.Circle(5)
+	 p3.addShape(forma);
+     game.physics.p2.world.addBody(p3)
+     var debugBody = new Phaser.Physics.P2.BodyDebug(game, p3);*/
+	
+	//PHASER WAY
+     //var p = game.physics.p2.createBody(100,100,1,false);
+     var p = new Phaser.Physics.P2.Body(game, null, 150, 100, 2);
+    // p.setCircle(radio);
+     p.addRectangle(10,30);
+     p.debug =true;
+     game.physics.p2.world.addBody(p.data)
+     p.velocity.x = 500;
+
+	 
+	 //circle Rope
+  	var last;
+        for(var i=cant-1; i>=0; i--){
+            var x = 400;
+            var y = (cant-i-cant/2)*radio*2;
+		 // prototype?? game-->physics-->p2-->world-->createBody ¬¬	
+          // var p = game.physics.p2.createBody(x,y+60,masa);
+		 //p-->Body :)
+		  cuerpo = new Phaser.Physics.P2.Body(game, null, x, y+60, masa = i==19 ? 0 : 1);
+           cuerpo.setCircle(radio)
+		   cuerpo.debug=true;
+		   cuerpo.angularForce=100;
+		   game.physics.p2.world.addBody(cuerpo.data)
+
+            if(last){
+             game.physics.p2.createDistanceConstraint(cuerpo,last,radio*2,2000);
+            } else {
+               cuerpo.velocity.x =10;
+            };
+            last = cuerpo;
+
+        };
+
+		//Rectangle Rope
+      	var ultimo;
+        for(var i=N-1; i>=0; i--){
+            var x = 200;
+            var y = (N-i-N/2)*h*2;
+		   rect = new Phaser.Physics.P2.Body(game, null, x, y+60, masa = i== 39? 0 : 1);
+		   rect.setRectangle(w,h);
+		   rect.debug=true;
+		   game.physics.p2.world.addBody(rect.data)
+            if(ultimo){
+             game.physics.p2.createDistanceConstraint(rect,ultimo,h,4500);
+            } else {
+               rect.velocity.x =-10;
+            };
+            ultimo = rect;
+
+        };
+		
+		
+		
+};
+
+function update(){};
+    
+
+
+function render() {
+game.debug.text("PROBANDO P2 JS", 32, 32);
+};
+
+</script>

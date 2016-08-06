@@ -1,2 +1,4 @@
-# mandarinpeel
-mandarin peel simulator - also good for other polyhedra / closed nets.
+Mandarin Peel Project
+---------------------
+
+Simulating a Mandarin Peel unfolding, and more general mesh unfoldings as well!

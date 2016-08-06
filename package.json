@@ -1,0 +1,28 @@
+{
+  "name": "mandarin-peel",
+  "version": "0.0.0",
+  "description": "Simulate Mandarin Peeling",
+  "main": "peel.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/algrant/mandarin-peel.git"
+  },
+  "keywords": [
+    "Geometry",
+    "Mesh",
+    "Folding",
+    "Unfolding"
+  ],
+  "author": "Al Grant",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/algrant/mandarin-peel/issues"
+  },
+  "dependencies": {
+    "lodash": "~2.4.1",
+    "three": "~0.66.4"
+  }
+}

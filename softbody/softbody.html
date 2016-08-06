@@ -1,0 +1,488 @@
+
+<!-- saved from url=(0067)https://dl.dropboxusercontent.com/u/8290261/Dev/sausages/index.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+      <title>Softbody Triangle Mesh - Box2D Test</title>
+   <style type="text/css" media="screen">
+   body {
+     margin: 0px;
+     overflow: hidden;
+     background: #EEE;
+   }
+   canvas {
+     position: absolute;
+     left: 0px;
+     top: 0px;
+   }
+   </style><style type="text/css"></style></head>
+   
+   <body>
+      <canvas id="canvas" width="1920" height="1115"></canvas>
+
+   <script type="text/javascript" src="Box2dWeb-2.1.a.3.min.js"></script>
+   <script type="text/javascript" src="simple2d.js"></script>
+   <script type="text/javascript" >
+     
+   var canvas = document.getElementById("canvas");
+   doResize();
+
+      
+    function doResize(){
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+        
+      init();
+        
+    }
+      
+    function init() {
+       var   b2Vec2 = Box2D.Common.Math.b2Vec2
+          ,  b2AABB = Box2D.Collision.b2AABB
+       	,	b2BodyDef = Box2D.Dynamics.b2BodyDef
+       	,	b2Body = Box2D.Dynamics.b2Body
+       	,	b2FixtureDef = Box2D.Dynamics.b2FixtureDef
+       	,	b2Fixture = Box2D.Dynamics.b2Fixture
+       	,	b2World = Box2D.Dynamics.b2World
+       	,	b2MassData = Box2D.Collision.Shapes.b2MassData
+       	,	b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape
+       	,	b2CircleShape = Box2D.Collision.Shapes.b2CircleShape
+       	,	b2DebugDraw = Box2D.Dynamics.b2DebugDraw
+        , b2MouseJointDef =  Box2D.Dynamics.Joints.b2MouseJointDef
+        , b2RevoluteJointDef = Box2D.Dynamics.Joints.b2RevoluteJointDef
+        , b2DistanceJointDef = Box2D.Dynamics.Joints.b2DistanceJointDef;
+         
+       var world = new b2World(
+             new b2Vec2(0, 0)    //gravity
+          ,  true                 //allow sleep
+       );
+         
+       var fixDef = new b2FixtureDef;
+       fixDef.density = 1.0;
+       fixDef.friction = 0.5;
+       fixDef.restitution = 0.2;
+         
+       var bodyDef = new b2BodyDef;
+         
+       //create ground
+       bodyDef.type = b2Body.b2_staticBody;
+       fixDef.shape = new b2PolygonShape;
+       fixDef.shape.SetAsBox(window.innerWidth/30, 2);
+       bodyDef.position.Set(10, window.innerHeight / 30 + 1.8);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+       bodyDef.position.Set(10, -1.8);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+       fixDef.shape.SetAsBox(2, 30);
+       bodyDef.position.Set(-1.8, 13);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+       bodyDef.position.Set(window.innerWidth/30 +1.8, 13);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+
+       //create background to pin to
+       // fixDef.shape.SetAsBox(window.innerWidth/30, window.innerHeight/30);
+       // fixDef.filter.groupIndex = 5;
+       // bodyDef.position.Set(0,0);
+       // var backgroundBody = world.CreateBody(bodyDef);
+       // backgroundBody.CreateFixture(fixDef);
+      
+
+       // SOFT BODY FUN!
+       var s2dPoint = simple2d.Point;
+
+       var sbverts = [
+                   new s2dPoint(0,0),
+                   new s2dPoint(-5,8.66),
+                   new s2dPoint(5,8.66),
+                   new s2dPoint(10,0),
+                   new s2dPoint(5,-8.66),
+                   ],
+            sbfaces = [
+                   [0,1,2],[0,2,3],[0,3,4]
+                   ];
+
+        var icomeshverts = [
+        [1,0],[7,0],[9,0],[11,0],
+        [0,1],[2,1],[4,1],[6,1],[8,1],[10,1],[12,1],
+        [1,2],[3,2],[5,2],[7,2],[9,2],[11,2],
+        [2,3],[4,3],[6,3],
+        [3,4],[5,4]];
+        for(var i = 0; i < icomeshverts.length; i++){
+          //scale appropriately
+          icomeshverts[i] = new s2dPoint(icomeshverts[i][0]*5, icomeshverts[i][1]*8.66);
+        }
+        var icomeshfaces = [
+        [0,5,4],[1,2,8],[2,9,8],[2,3,9],[3,10,9],
+        [4,5,11],[5,12,11],[12,6,13],[6,7,13],[13,7,14],[7,8,14],[14,8,15],[8,9,15],[9,10,16],
+        [11,12,17],[17,12,18],[18,12,13],[18,13,19],
+        [20,18,21],[18,19,21]];
+
+
+        var sbedges = {
+          edgeGraph:{},
+          init: function(verts, faces){
+            // reset stuff
+            this.edgeGraph = {};
+
+            for(var i = 0; i < faces.length; i++){
+            var face = faces[i];
+            for(var j = 0; j < face.length; j++){
+              var edge = [face[j].toString(),face[(j+1)%face.length].toString()];
+              if(!(edge[0] in this.edgeGraph)){
+                this.edgeGraph[edge[0]] = {};
+              }
+              var prev = j-1 >= 0? face[j-1]:face[face.length-1];
+              var next = j+2 < face.length? face[j+2]:face[(j+2)%face.length];
+              this.edgeGraph[edge[0]][edge[1]] = {v1:edge[0], v2:edge[1], face:i, next:next, prev:prev, connected:false};
+              }
+            }
+          },
+          getEdge :function(v1, v2){
+            me = this;
+            v1_s  = v1.toString();
+            v2_s  = v2.toString();
+            return {
+              v1:v1,
+              v2:v2,
+              f1:me.edgeGraph[v1_s][v2_s].face ? me.edgeGraph[v1_s][v2_s].face: undefined,
+              f2:me.edgeGraph[v2_s][v1_s].face ? me.edgeGraph[v2_s][v1_s].face: undefined,
+              connected:me.edgeGraph[v1_s][v2_s].connected,
+              next:function(){
+                return me.getEdge(v2,me.edgeGraph[v1_s][v2_s].next)
+              },
+              previous:function(){
+                return me.getEdge(me.edgeGraph[v1_s][v2_s].prev,v1)
+              },
+              opposite:function(){
+                return me.getEdge(v2,v1)
+              },
+              equals:function(edge){
+                return edge.f1 == this.f1 && edge.f2 == this.f2
+              }
+            }
+          },
+          iterator:function(){
+            var me = this;
+            var edgeGraph = this.edgeGraph;
+
+            var iv1 = 0;
+            var iv2 = 0;
+            var v1s = [], v2s =[];
+
+            for(key in edgeGraph){
+              v1s.push(key);
+            }
+            for(key in edgeGraph[v1s[iv1]]){
+              v2s.push(key);
+            }
+
+            return {
+              edgeGraph:me.edgeGraph,
+              iv1:0,
+              iv2:0,
+              v1s:v1s,
+              v2s:v2s,
+              visitedEdges:{},
+              next:function(){
+                if(this.iv2 < this.v2s.length){
+                  var tempV1 = this.v1s[this.iv1],
+                      tempV2 = this.v2s[this.iv2];
+                  this.iv2+=1;
+                  if(!(tempV1+"_"+tempV2 in this.visitedEdges) && !(tempV2+"_"+tempV1 in this.visitedEdges)){
+                    this.visitedEdges[tempV1+"_"+tempV2] = true;
+                    return(this.edgeGraph[tempV1][tempV2]);
+                  }else{
+                    return this.next();
+                  }
+                }else{
+                  if(this.iv1 < this.v1s.length){
+                    this.iv1 += 1;
+                    this.iv2 = 0;
+                    this.v2s = [];
+                    for(key in edgeGraph[this.v1s[this.iv1]]){
+                      this.v2s.push(key);
+                    }
+                    return this.next();
+                  }
+                  else{
+                    return undefined;
+                  }
+                }
+              },
+              hasNext:function(){
+                return this.iv1 < this.v1s.length-1 || (this.iv1 == this.v1s.length - 1 && this.iv2 < this.v2s.length)
+              }
+            }
+          }
+        }
+
+        window.sausagePhysics = new Array()
+
+
+
+        // triangular subdivision algorithm...
+        sbverts = icomeshverts;
+        sbfaces = icomeshfaces;
+        sbedges.init(sbverts,sbfaces)
+        var edgesIterator = sbedges.iterator();
+
+        var newVerts = [];
+        var newFaces = [];
+
+
+        while(edgesIterator.hasNext()){
+          var index = newVerts.length;
+          var edge = edgesIterator.next();
+          newVerts.push(sbverts[Number(edge.v1)].add(sbverts[Number(edge.v2)]).div(2))
+          edge.newVert = index;
+          if(edge.v2 in sbedges.edgeGraph && edge.v1 in sbedges.edgeGraph[edge.v2]){
+            sbedges.edgeGraph[edge.v2][edge.v1].newVert = index;
+          }
+        }
+        for(var f = 0; f<sbfaces.length; f++){
+          var face = sbfaces[f];
+          var v1 = face[0],
+              v2 = face[1],
+              v3 = face[2],
+              v4 = sbedges.edgeGraph[v1][v2].newVert + sbverts.length,
+              v5 = sbedges.edgeGraph[v2][v3].newVert + sbverts.length,
+              v6 = sbedges.edgeGraph[v3][v1].newVert + sbverts.length;
+          newFaces = newFaces.concat([[v1,v4,v6],[v4,v2,v5],[v4,v5,v6],[v6,v5,v3]]);
+        }
+
+        sbfaces = newFaces;
+        sbverts = sbverts.concat(newVerts)
+        sbedges.init(sbverts, sbfaces);
+        // recalculate with extra verts
+
+        //don't use the extra verts...
+        sbverts = icomeshverts;
+        sbfaces = icomeshfaces;
+        sbedges.init(sbverts,sbfaces)
+
+        //console.log(sbedges.getEdge(0,1))
+
+        // create mesh object using sbverts, sbfaces and sbedges
+
+        var groupIndex = 2;
+        var mass = 0.01;
+        var linearDamping = 1;
+        var b2dVerts = [];
+        var b2dJoints = [];
+        for(var i = 0; i < sbverts.length; i++){
+          // init box2d "verts" bodies
+          var ballDef = new b2BodyDef;
+          ballDef.type = b2Body.b2_dynamicBody;
+          ballDef.linearDamping = linearDamping;
+          ballDef.fixedRotation = true;
+           
+          fixDef.shape = new b2CircleShape(
+             .2 //radius
+          );
+          fixDef.mass = mass;
+          fixDef.filter.groupIndex = groupIndex;
+          ballDef.position.x = (sbverts[i].x + 15)/5;
+          ballDef.position.y = (sbverts[i].y + 15)/5;
+          
+          ballDef.ball = false;
+            
+          ball = world.CreateBody(ballDef);
+          ball.CreateFixture(fixDef);
+          b2dVerts.push(ball);
+        }
+
+        // create springs
+        for(v1_s in sbedges.edgeGraph){
+          for(v2_s in sbedges.edgeGraph[v1_s]){
+            //unique edges only
+            var uniqueEdge = !(v2_s in sbedges.edgeGraph && v1_s in sbedges.edgeGraph[v2_s]);
+            if(sbedges.edgeGraph[v1_s][v2_s].v1 < sbedges.edgeGraph[v1_s][v2_s].v2 || uniqueEdge){
+              
+              addJoint(b2dVerts[sbedges.edgeGraph[v1_s][v2_s].v1], b2dVerts[sbedges.edgeGraph[v1_s][v2_s].v2])
+              if(uniqueEdge){
+                // init box2d "verts" bodies
+                var ballDef = new b2BodyDef;
+                ballDef.type = b2Body.b2_dynamicBody;
+                ballDef.linearDamping = linearDamping;
+                ballDef.fixedRotation = true;
+                 
+                fixDef.shape = new b2CircleShape(
+                   .2 //radius
+                );
+                fixDef.mass = mass;
+                fixDef.filter.groupIndex = groupIndex;
+
+                var midpos = sbverts[sbedges.edgeGraph[v1_s][v2_s].v1].add(sbverts[sbedges.edgeGraph[v1_s][v2_s].v2]).div(2);
+                fixDef.filter.groupIndex = -2;
+                ballDef.position.x = (midpos.x + 15)/5;
+                ballDef.position.y = (midpos.y + 15)/5;
+                
+                ballDef.ball = false;
+                  
+                ball = world.CreateBody(ballDef);
+                ball.CreateFixture(fixDef);
+
+                addJoint(ball,b2dVerts[sbedges.edgeGraph[v1_s][v2_s].v1])
+                addJoint(ball,b2dVerts[sbedges.edgeGraph[v1_s][v2_s].v2])
+                addJoint(ball,b2dVerts[sbedges.edgeGraph[v1_s][v2_s].next])
+                b2dVerts.push(ball);
+              }else{
+                addJoint(b2dVerts[sbedges.edgeGraph[v2_s][v1_s].next],b2dVerts[sbedges.edgeGraph[v1_s][v2_s].next])
+                //addJoint(ball,b2dVerts[sbedges.edgeGraph[v2_s][v1_s].next])
+              }
+            }
+          }
+        }
+        // var pinJoint = new b2RevoluteJointDef();
+        // pinJoint.bodyA = b2dVerts[0];
+        // pinJoint.bodyB = backgroundBody;
+        // console.log(b2dVerts[0].m_xf.position);
+        // pinJoint.localAnchorA = new b2Vec2(0,0);
+        // pinJoint.localAnchorB = b2dVerts[0].m_xf.position;
+        // world.CreateJoint(pinJoint);
+
+        // pinJoint.bodyA = b2dVerts[b2dVerts.length-1];
+        // pinJoint.bodyB = backgroundBody;
+        // console.log(b2dVerts[b2dVerts.length-1].m_xf.position);
+        // pinJoint.localAnchorA = new b2Vec2(0,0);
+        // pinJoint.localAnchorB = b2dVerts[b2dVerts.length-1].m_xf.position;
+
+        // world.CreateJoint(pinJoint);
+         
+       function addJoint(body1, body2, length) {
+           var joint = new b2DistanceJointDef();
+           joint.Initialize(body1, body2, body1.GetWorldCenter(), body2.GetWorldCenter());
+           if (length != undefined){
+            joint.length = length;
+           }
+           
+           joint.frequencyHz = 20;
+           joint.dampingRatio = 5;
+           world.CreateJoint(joint);
+       }
+         
+       //setup debug draw
+       var debugDraw = new b2DebugDraw();
+       debugDraw.SetSprite(document.getElementById("canvas").getContext("2d"));
+       debugDraw.SetDrawScale(30.0);
+       debugDraw.SetFillAlpha(0.5);
+       debugDraw.SetLineThickness(1.0);
+       debugDraw.SetFlags(b2DebugDraw.e_shapeBit | b2DebugDraw.e_jointBit);
+       world.SetDebugDraw(debugDraw);
+         
+       window.setInterval(update, 1000 / 60);
+         
+       //mouse
+         
+       var mouseX, mouseY, mousePVec, isMouseDown, selectedBody, mouseJoint;
+       var canvasPosition = getElementPosition(document.getElementById("canvas"));
+         
+       document.addEventListener("mousedown", function(e) {
+          isMouseDown = true;
+          handleMouseMove(e);
+          document.addEventListener("mousemove", handleMouseMove, true);
+       }, true);
+         
+       document.addEventListener("mouseup", function() {
+          document.removeEventListener("mousemove", handleMouseMove, true);
+          isMouseDown = false;
+          mouseX = undefined;
+          mouseY = undefined;
+       }, true);
+         
+       function handleMouseMove(e) {
+          mouseX = (e.clientX - canvasPosition.x) / 30;
+          mouseY = (e.clientY - canvasPosition.y) / 30;
+       };
+         
+       function getBodyAtMouse() {
+          mousePVec = new b2Vec2(mouseX, mouseY);
+          var aabb = new b2AABB();
+          aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
+          aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
+            
+          // Query the world for overlapping shapes.
+
+          selectedBody = null;
+          world.QueryAABB(getBodyCB, aabb);
+          return selectedBody;
+       }
+
+       function getBodyCB(fixture) {
+          if(fixture.GetBody().GetType() != b2Body.b2_staticBody) {
+             if(fixture.GetShape().TestPoint(fixture.GetBody().GetTransform(), mousePVec)) {
+                selectedBody = fixture.GetBody();
+                return false;
+             }
+          }
+          return true;
+       }
+         
+       //update
+         
+       function update() {
+
+          if(isMouseDown && (!mouseJoint)) {
+             var body = getBodyAtMouse();
+             //console.log(Box2D.Dynamics.Joints.b2Mousev1_sJointDef);
+             if(body) {
+
+                var md = new b2MouseJointDef();
+                md.bodyA = world.GetGroundBody();
+                md.bodyB = body;
+                md.target.Set(mouseX, mouseY);
+                md.collideConnected = true;
+                md.maxForce = 1300.0 * body.GetMass();
+                mouseJoint = world.CreateJoint(md);
+                body.SetAwake(true);
+                //body.m_xf.position = new b2Vec2(mouseX, mouseY);
+             }
+          }
+            
+          if(mouseJoint) {
+             if(isMouseDown) {
+                mouseJoint.SetTarget(new b2Vec2(mouseX, mouseY));
+                //body.m_xf.position = new b2Vec2(mouseX, mouseY);
+             } else {
+                world.DestroyJoint(mouseJoint);
+                mouseJoint = null;
+             }
+          }
+         
+          world.Step(1 / 30, 10, 10);
+          world.DrawDebugData();
+          world.ClearForces();
+          
+          // for (var i = 0, l = sausages.length; i < l; i++){
+          // //   sausages[i].iterate();
+          // // }
+          
+       };
+         
+       //helpers
+         
+       //http://js-tut.aardon.de/js-tut/tutorial/position.html
+       function getElementPosition(element) {
+          var elem=element, tagname="", x=0, y=0;
+           
+          while((typeof(elem) == "object") && (typeof(elem.tagName) != "undefined")) {
+             y += elem.offsetTop;
+             x += elem.offsetLeft;
+             tagname = elem.tagName.toUpperCase();
+
+             if(tagname == "BODY")
+                elem=0;
+
+             if(typeof(elem) == "object") {
+                if(typeof(elem.offsetParent) == "object")
+                   elem = elem.offsetParent;
+             }
+          }
+
+          return {x: x, y: y};
+       }
+
+
+    };
+   
+   </script>
+   
+   
+</body></html>

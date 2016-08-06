@@ -1,0 +1,296 @@
+
+<!-- saved from url=(0067)https://dl.dropboxusercontent.com/u/8290261/Dev/sausages/index.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+      <title>KORV</title>
+   <style type="text/css" media="screen">
+   body {
+     margin: 0px;
+     overflow: hidden;
+     background: #EEE;
+   }
+   canvas {
+     position: absolute;
+     left: 0px;
+     top: 0px;
+   }
+   </style><style type="text/css"></style></head>
+   
+   <body>
+      <canvas id="canvas" width="1920" height="1115"></canvas>
+      <canvas id="sausages" resize="" width="1920" height="1103"></canvas>
+   
+   <script type="text/javascript" src="sausages_files/paper.js"></script>
+   <script type="text/javascript" src="sausages_files/Box2dWeb-2.1.a.3.min.js"></script>
+
+   <script type="text/paperscript" canvas="sausages" id="paperscope-1" data-paper-ignore="true">
+     
+   var canvas = document.getElementById("canvas");
+   //doResize();
+      
+    window.onresize = function(event) {
+      //doResize();
+    }
+      
+    function doResize(){
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+        
+      init();
+        
+    }
+      
+    function init() {
+       var   b2Vec2 = Box2D.Common.Math.b2Vec2
+          ,  b2AABB = Box2D.Collision.b2AABB
+       	,	b2BodyDef = Box2D.Dynamics.b2BodyDef
+       	,	b2Body = Box2D.Dynamics.b2Body
+       	,	b2FixtureDef = Box2D.Dynamics.b2FixtureDef
+       	,	b2Fixture = Box2D.Dynamics.b2Fixture
+       	,	b2World = Box2D.Dynamics.b2World
+       	,	b2MassData = Box2D.Collision.Shapes.b2MassData
+       	,	b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape
+       	,	b2CircleShape = Box2D.Collision.Shapes.b2CircleShape
+       	,	b2DebugDraw = Box2D.Dynamics.b2DebugDraw
+        , b2MouseJointDef =  Box2D.Dynamics.Joints.b2MouseJointDef
+        , b2RevoluteJointDef = Box2D.Dynamics.Joints.b2RevoluteJointDef
+        , b2DistanceJointDef = Box2D.Dynamics.Joints.b2DistanceJointDef;
+         
+       var world = new b2World(
+             new b2Vec2(0, 10)    //gravity
+          ,  false                 //allow sleep
+       );
+         
+       var fixDef = new b2FixtureDef;
+       fixDef.density = 1.0;
+       fixDef.friction = 0.5;
+       fixDef.restitution = 0.2;
+         
+       var bodyDef = new b2BodyDef;
+         
+       //create ground
+       bodyDef.type = b2Body.b2_staticBody;
+       fixDef.shape = new b2PolygonShape;
+       fixDef.shape.SetAsBox(window.innerWidth/30, 2);
+       bodyDef.position.Set(10, window.innerHeight / 30 + 1.8);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+       bodyDef.position.Set(10, -1.8);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+       fixDef.shape.SetAsBox(2, 30);
+       bodyDef.position.Set(-1.8, 13);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+       bodyDef.position.Set(window.innerWidth/30 +1.8, 13);
+       world.CreateBody(bodyDef).CreateFixture(fixDef);
+         
+         
+       //create some objects
+       window.sausagePhysics = new Array()
+       for (var i=0; i < 5; i++) {
+         
+         var balls = new Array();
+         var x = 1 +Math.random() * window.innerWidth/50
+         var y = 2 + Math.random()*10 + 4
+         
+         for (var j=0; j < 2 + Math.random()*10; j++) {
+           var ballDef = new b2BodyDef;
+           ballDef.type = b2Body.b2_dynamicBody;
+           
+           fixDef.shape = new b2CircleShape(
+             1.6 //radius
+           );
+           
+           ballDef.position.x = x;
+           ballDef.position.y = y;
+           ballDef.ball = true;
+            
+           ball = world.CreateBody(ballDef);
+           ball.CreateFixture(fixDef);
+           balls.push(ball);
+            
+           if(j > 0){
+             addJoint(balls[j-1], balls[j])
+           }
+            
+           x += 1.6;
+         };
+         window.sausagePhysics.push(balls)
+       };
+         
+       function addJoint(body1, body2) {
+           var joint = new b2DistanceJointDef();
+           joint.Initialize(body1, body2, body1.GetWorldCenter(), body2.GetWorldCenter());
+           world.CreateJoint(joint);
+       }
+         
+       //setup debug draw
+       var debugDraw = new b2DebugDraw();
+       debugDraw.SetSprite(document.getElementById("canvas").getContext("2d"));
+       debugDraw.SetDrawScale(30.0);
+       debugDraw.SetFillAlpha(0.5);
+       debugDraw.SetLineThickness(1.0);
+       debugDraw.SetFlags(b2DebugDraw.e_shapeBit | b2DebugDraw.e_jointBit);
+       world.SetDebugDraw(debugDraw);
+         
+       window.setInterval(update, 1000 / 60);
+         
+       //mouse
+         
+       var mouseX, mouseY, mousePVec, isMouseDown, selectedBody, mouseJoint;
+       var canvasPosition = getElementPosition(document.getElementById("canvas"));
+         
+       document.addEventListener("mousedown", function(e) {
+          isMouseDown = true;
+          handleMouseMove(e);
+          document.addEventListener("mousemove", handleMouseMove, true);
+       }, true);
+         
+       document.addEventListener("mouseup", function() {
+          document.removeEventListener("mousemove", handleMouseMove, true);
+          isMouseDown = false;
+          mouseX = undefined;
+          mouseY = undefined;
+       }, true);
+         
+       function handleMouseMove(e) {
+          mouseX = (e.clientX - canvasPosition.x) / 30;
+          mouseY = (e.clientY - canvasPosition.y) / 30;
+       };
+         
+       function getBodyAtMouse() {
+          mousePVec = new b2Vec2(mouseX, mouseY);
+          var aabb = new b2AABB();
+          aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
+          aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
+            
+          // Query the world for overlapping shapes.
+
+          selectedBody = null;
+          world.QueryAABB(getBodyCB, aabb);
+          return selectedBody;
+       }
+
+       function getBodyCB(fixture) {
+          if(fixture.GetBody().GetType() != b2Body.b2_staticBody) {
+             if(fixture.GetShape().TestPoint(fixture.GetBody().GetTransform(), mousePVec)) {
+                selectedBody = fixture.GetBody();
+                return false;
+             }
+          }
+          return true;
+       }
+         
+       //update
+         
+       function update() {
+         
+          if(isMouseDown && (!mouseJoint)) {
+             var body = getBodyAtMouse();
+             if(body) {
+                var md = new b2MouseJointDef();
+                md.bodyA = world.GetGroundBody();
+                md.bodyB = body;
+                md.target.Set(mouseX, mouseY);
+                md.collideConnected = true;
+                md.maxForce = 1300.0 * body.GetMass();
+                mouseJoint = world.CreateJoint(md);
+                body.SetAwake(true);
+             }
+          }
+            
+          if(mouseJoint) {
+             if(isMouseDown) {
+                mouseJoint.SetTarget(new b2Vec2(mouseX, mouseY));
+             } else {
+                world.DestroyJoint(mouseJoint);
+                mouseJoint = null;
+             }
+          }
+         
+          world.Step(1 / 30, 10, 10);
+          world.DrawDebugData();
+          world.ClearForces();
+          
+          for (var i = 0, l = sausages.length; i < l; i++){
+            sausages[i].iterate();
+          }
+          
+       };
+         
+       //helpers
+         
+       //http://js-tut.aardon.de/js-tut/tutorial/position.html
+       function getElementPosition(element) {
+          var elem=element, tagname="", x=0, y=0;
+           
+          while((typeof(elem) == "object") && (typeof(elem.tagName) != "undefined")) {
+             y += elem.offsetTop;
+             x += elem.offsetLeft;
+             tagname = elem.tagName.toUpperCase();
+
+             if(tagname == "BODY")
+                elem=0;
+
+             if(typeof(elem) == "object") {
+                if(typeof(elem.offsetParent) == "object")
+                   elem = elem.offsetParent;
+             }
+          }
+
+          return {x: x, y: y};
+       }
+
+
+    };
+   
+     var sausages = [];
+     var Sausage = Base.extend({
+      initialize: function(skeleton) {
+        
+        // Settings
+        this.skeleton = skeleton
+        this.path = new Path()
+        this.path.style = {
+          strokeColor: '#FFAAAA',
+          strokeWidth: 90,
+          strokeCap: 'round'
+        };
+        
+        for (var i=0; i < this.skeleton.length; i++) {
+          
+          this.path.add(new Point(
+              Math.round(this.skeleton[i].m_xf.position.x*30),
+              Math.round(this.skeleton[i].m_xf.position.y*30))
+          );
+          
+          };
+        
+      },
+
+      iterate: function() {
+        
+        for (var i=0; i < this.skeleton.length; i++) {
+          
+          this.path.segments[i].point = new Point(
+            Math.round(this.skeleton[i].m_xf.position.x*30),
+            Math.round(this.skeleton[i].m_xf.position.y*30)
+          )
+          
+        };
+        
+        this.path.smooth()
+        
+      }
+     });
+    
+     for (var i=0; i < window.sausagePhysics.length; i++) {
+       var skeleton = window.sausagePhysics[i]
+       sausages.push(new Sausage(skeleton))
+     };
+    
+     function onFrame() {
+       //for (var i = 0, l = sausages.length; i < l; i++)
+         //sausages[i].iterate();
+     }
+   </script>
+   
+   
+</body></html>
